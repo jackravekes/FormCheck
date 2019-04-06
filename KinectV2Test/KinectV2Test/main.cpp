@@ -8,17 +8,17 @@ using namespace std;
 void doJob() {
   NtKinect kinect;
   while (1) {
-    kinect.setDepth(true);
+    kinect.setRGB();
     kinect.setSkeleton();
     for (auto person : kinect.skeleton) {
       for (auto joint : person) {
         if (joint.TrackingState == TrackingState_NotTracked) continue;
-        DepthSpacePoint dp;
-        kinect.coordinateMapper->MapCameraPointToDepthSpace(joint.Position,&dp);
-        cv::rectangle(kinect.depthImage, cv::Rect((int)dp.X-5, (int)dp.Y-5,10,10), cv::Scalar(0,0,255),2);
+        ColorSpacePoint cp;
+        kinect.coordinateMapper->MapCameraPointToColorSpace(joint.Position,&cp);
+        cv::rectangle(kinect.rgbImage, cv::Rect((int)cp.X-5, (int)cp.Y-5,10,10), cv::Scalar(0,0,255),2);
       }
     }
-    cv::imshow("depth", kinect.depthImage);
+    cv::imshow("rgb", kinect.rgbImage);
     auto key = cv::waitKey(1);
     if (key == 'q') break;
   }
