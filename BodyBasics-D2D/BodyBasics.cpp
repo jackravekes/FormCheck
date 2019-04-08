@@ -16,7 +16,7 @@ static const float c_HandSize = 30.0f;
 
 // Rep Tracking Parameters
 int repCount = -1;
-int lowerRepThreshold = -40;
+int lowerRepThreshold = -30;
 int upperRepThreshold = 0;
 enum repState {up, down};
 repState currRep = up;
@@ -349,14 +349,26 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
                         D2D1_POINT_2F jointPoints[JointType_Count];
 
                         hr = pBody->GetJoints(_countof(joints), joints);
+						bool trackedJoints[JointType_Count] = { 0 }; // Creates a boolean array of size JointType_Count that's all false
+
+
                         if (SUCCEEDED(hr))
                         {
                             for (int j = 0; j < _countof(joints); ++j)
                             {
+								if (joints[j].TrackingState == TrackingState_Tracked) {
+									if (joints[j].JointType == JointType_Head) { trackReps(joints[j]); }
+									trackedJoints[j] = true;
+								}
                                 jointPoints[j] = BodyToScreen(joints[j].Position, width, height);
-								if (joints[j].JointType == JointType_Head) { trackReps(joints[j]); }
                             }
-
+							// Only try to fix form if lifter is currently doing the exercise
+							if (currRep == down) {
+								// Tests go here:
+								if ((trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) || (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_KneeRight])) {
+									checkKnees(joints, trackedJoints);
+								}
+							}
                             DrawBody(joints, jointPoints);
                         }
                     }
@@ -387,34 +399,57 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 
 void CBodyBasics::trackReps(const Joint& head)
 {
-	if (head.TrackingState == TrackingState_Tracked)
+	int headYinCM = head.Position.Y * 100;
+	if (repCount == -1)
 	{
-		int headYinCM = head.Position.Y * 100;
-		if (repCount == -1)
-		{
-			repCount++;
-			upperRepThreshold = headYinCM;
-			lowerRepThreshold += upperRepThreshold;
+		repCount++;
+		upperRepThreshold = headYinCM;
+		lowerRepThreshold += upperRepThreshold;
+	}
+
+	if (currRep == up && headYinCM < lowerRepThreshold)
+	{
+		currRep = down;
+	}
+
+	if (currRep == down && headYinCM > upperRepThreshold)
+	{
+		repCount++;
+		currRep = up;
+	}
+
+	WCHAR szStatusMessage[120];
+	LPCTSTR stringFormat = TEXT("%s %d");
+	TCHAR* headText = TEXT("Head Location: ");
+	TCHAR* repText = TEXT("Rep Count: ");
+	StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
+
+	SetStatusMessage(szStatusMessage, 33, false);
+}
+
+void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[JointType_Count])
+{
+	if (trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) {
+		int kneeLeftCM = joints[JointType_KneeLeft].Position.X * 100;
+		int ankleLeftCM = joints[JointType_AnkleLeft].Position.X * 100;
+		if (abs(kneeLeftCM - ankleLeftCM) >= 7) {
+			WCHAR szStatusMessage[120];
+			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+
+			SetStatusMessage(szStatusMessage, 3000, false);
 		}
+	}
+	if (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight]) {
+		int kneeRightCM = joints[JointType_KneeRight].Position.X * 100;
+		int ankleRightCM = joints[JointType_AnkleRight].Position.X * 100;
+		if (abs(kneeRightCM - ankleRightCM) >= 7) {
+			WCHAR szStatusMessage[120];
+			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 
-		if (currRep == up && headYinCM < lowerRepThreshold)
-		{
-			currRep = down;
+			SetStatusMessage(szStatusMessage, 3000, true);
 		}
-
-		if (currRep == down && headYinCM > upperRepThreshold)
-		{
-			repCount++;
-			currRep = up;
-		}
-
-		WCHAR szStatusMessage[120];
-		LPCTSTR stringFormat = TEXT("%s %d");
-		TCHAR* headText = TEXT("Head Location: ");
-		TCHAR* repText = TEXT("Rep Count: ");
-		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
-
-		SetStatusMessage(szStatusMessage, 33, false);
 	}
 }
 
