@@ -10,6 +10,15 @@
 #include "BodyBasics.h"
 #include <cmath>
 
+//Audio
+#include <Mmsystem.h>
+#include <Windows.h>
+#include <queue> 
+#include <string>
+#include <map>
+
+using namespace std;
+
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
 static const float c_InferredBoneThickness = 1.0f;
@@ -24,6 +33,9 @@ repState currRep = up;
 
 double currLeftLegAngle = 180;
 double currRightLegAngle = 180;
+
+//Audio
+queue<string> audioToPlay;
 
 /// <summary>
 /// Entry point for the application
@@ -383,6 +395,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 								currRightLegAngle = 180;
 							}
                             DrawBody(joints, jointPoints);
+							playAudioFeedback();
                         }
                     }
                 }
@@ -437,8 +450,11 @@ void CBodyBasics::trackReps(const Joint& head)
 	TCHAR* headText = TEXT("Head Location: ");
 	TCHAR* repText = TEXT("Rep Count: ");
 	StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
-
 	SetStatusMessage(szStatusMessage, 33, false);
+
+	if ((repCount % 10 == 0) && (repCount != 0)) {
+		audioToPlay.push("audio/good_job.wav");
+	}
 }
 
 void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[JointType_Count])
@@ -450,8 +466,9 @@ void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[J
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-
 			SetStatusMessage(szStatusMessage, 3000, false);
+
+			audioToPlay.push("audio/knees_over_feet.wav");
 		}
 	}
 	if (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight]) {
@@ -461,8 +478,9 @@ void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[J
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-
 			SetStatusMessage(szStatusMessage, 3000, true);
+
+			audioToPlay.push("audio/knees_over_feet.wav");
 		}
 	}
 }
@@ -549,15 +567,27 @@ void CBodyBasics::checkSquatDepth() {
 		WCHAR szStatusMessage[120];
 		TCHAR* headText = TEXT("Try to squat deeper.");
 		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-
 		SetStatusMessage(szStatusMessage, 3000, true);
+
+		audioToPlay.push("audio/try_to_squat_deeper.wav");
 	}
 	else if ((currRightLegAngle < 70) || (currLeftLegAngle < 70)) {
 		WCHAR szStatusMessage[120];
 		TCHAR* headText = TEXT("You squatted too deep.");
 		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-
 		SetStatusMessage(szStatusMessage, 3000, true);
+
+		audioToPlay.push("audio/squatted_too_deep.wav");
+	}
+}
+
+// Play the audio feedback
+void CBodyBasics::playAudioFeedback() {
+	if (!audioToPlay.empty()) {
+		string audioFile = audioToPlay.front();
+		wstring stemp = wstring(audioFile.begin(), audioFile.end());
+		PlaySound(stemp.c_str(), NULL, SND_ASYNC);
+		audioToPlay.pop();
 	}
 }
 

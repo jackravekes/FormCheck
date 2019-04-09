@@ -124,12 +124,13 @@ private:
     /// <param name="width">width (in pixels) of output buffer</param>
     /// <param name="height">height (in pixels) of output buffer</param>
     /// <returns>point in screen-space</returns>
-    D2D1_POINT_2F           BodyToScreen(const CameraSpacePoint& bodyPoint, int width, int height);
+    D2D1_POINT_2F BodyToScreen(const CameraSpacePoint& bodyPoint, int width, int height);
 
 	void trackReps(const Joint& head);
 	void checkKnees(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
 	void updateSquatDepth(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
 	void checkSquatDepth();
+	void playAudioFeedback();
 
     /// <summary>
     /// Draws a body 
