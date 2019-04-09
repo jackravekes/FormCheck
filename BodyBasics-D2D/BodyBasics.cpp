@@ -8,6 +8,7 @@
 #include <strsafe.h>
 #include "resource.h"
 #include "BodyBasics.h"
+#include <cmath>
 
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
@@ -20,6 +21,9 @@ int lowerRepThreshold = -30;
 int upperRepThreshold = 0;
 enum repState {up, down};
 repState currRep = up;
+
+double currLeftLegAngle = 180;
+double currRightLegAngle = 180;
 
 /// <summary>
 /// Entry point for the application
@@ -365,9 +369,18 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 							// Only try to fix form if lifter is currently doing the exercise
 							if (currRep == down) {
 								// Tests go here:
-								if ((trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) || (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_KneeRight])) {
+								if ((trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) 
+									|| (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_KneeRight])) {
 									checkKnees(joints, trackedJoints);
 								}
+								if ((trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft] && trackedJoints[JointType_HipLeft])
+									|| trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight] && trackedJoints[JointType_HipRight]) {
+									updateSquatDepth(joints, trackedJoints);
+								}
+							}
+							else {
+								currLeftLegAngle = 180;
+								currRightLegAngle = 180;
 							}
                             DrawBody(joints, jointPoints);
                         }
@@ -414,6 +427,7 @@ void CBodyBasics::trackReps(const Joint& head)
 
 	if (currRep == down && headYinCM > upperRepThreshold)
 	{
+		checkSquatDepth();
 		repCount++;
 		currRep = up;
 	}
@@ -450,6 +464,100 @@ void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[J
 
 			SetStatusMessage(szStatusMessage, 3000, true);
 		}
+	}
+}
+
+void CBodyBasics::updateSquatDepth(Joint joints[JointType_Count], bool trackedJoints[JointType_Count])
+{
+	if (trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft] && trackedJoints[JointType_HipLeft]) {
+		double kneeLeftX = joints[JointType_KneeLeft].Position.X;
+		double ankleLeftX = joints[JointType_AnkleLeft].Position.X;
+		double hipLeftX = joints[JointType_HipLeft].Position.X;
+
+		double kneeLeftY = joints[JointType_KneeLeft].Position.Y;
+		double ankleLeftY = joints[JointType_AnkleLeft].Position.Y;
+		double hipLeftY = joints[JointType_HipLeft].Position.Y;
+
+		double kneeLeftZ = joints[JointType_KneeLeft].Position.Z;
+		double ankleLeftZ = joints[JointType_AnkleLeft].Position.Z;
+		double hipLeftZ = joints[JointType_HipLeft].Position.Z;
+
+		double vectorAnkleKneeLeftX = kneeLeftX - ankleLeftX;
+		double vectorAnkleKneeLeftY = kneeLeftY - ankleLeftY;
+		double vectorAnkleKneeLeftZ = kneeLeftZ - ankleLeftZ;
+
+		double vectorKneeHipLeftX = hipLeftX - kneeLeftX;
+		double vectorKneeHipLeftY = hipLeftY - kneeLeftY;
+		double vectorKneeHipLeftZ = hipLeftZ - kneeLeftZ;
+
+		double dotAnkleKneeHip = vectorAnkleKneeLeftX * vectorKneeHipLeftX
+			+ vectorAnkleKneeLeftY * vectorKneeHipLeftY
+			+ vectorAnkleKneeLeftZ * vectorKneeHipLeftZ;
+
+		double magAnkleKnee = sqrt(pow(vectorAnkleKneeLeftX, 2)
+			+ pow(vectorAnkleKneeLeftY, 2) + pow(vectorAnkleKneeLeftZ, 2));
+
+		double magKneeHip = sqrt(pow(vectorKneeHipLeftX, 2)
+			+ pow(vectorKneeHipLeftY, 2) + pow(vectorKneeHipLeftZ, 2));
+
+		double leftLegAngle = acos(dotAnkleKneeHip / (magAnkleKnee * magKneeHip));
+		if (leftLegAngle < currLeftLegAngle) {
+			currLeftLegAngle = leftLegAngle;
+		}
+	}
+	if (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight] && trackedJoints[JointType_HipRight]) {
+		double kneeRightX = joints[JointType_KneeRight].Position.X;
+		double ankleRightX = joints[JointType_AnkleRight].Position.X;
+		double hipRightX = joints[JointType_HipRight].Position.X;
+
+		double kneeRightY = joints[JointType_KneeRight].Position.Y;
+		double ankleRightY = joints[JointType_AnkleRight].Position.Y;
+		double hipRightY = joints[JointType_HipRight].Position.Y;
+
+		double kneeRightZ = joints[JointType_KneeRight].Position.Z;
+		double ankleRightZ = joints[JointType_AnkleRight].Position.Z;
+		double hipRightZ = joints[JointType_HipRight].Position.Z;
+
+		double vectorAnkleKneeRightX = kneeRightX - ankleRightX;
+		double vectorAnkleKneeRightY = kneeRightY - ankleRightY;
+		double vectorAnkleKneeRightZ = kneeRightZ - ankleRightZ;
+
+		double vectorKneeHipRightX = hipRightX - kneeRightX;
+		double vectorKneeHipRightY = hipRightY - kneeRightY;
+		double vectorKneeHipRightZ = hipRightZ - kneeRightZ;
+
+		double dotAnkleKneeHip = vectorAnkleKneeRightX * vectorKneeHipRightX
+			+ vectorAnkleKneeRightY * vectorKneeHipRightY
+			+ vectorAnkleKneeRightZ * vectorKneeHipRightZ;
+
+		double magAnkleKnee = sqrt(pow(vectorAnkleKneeRightX, 2)
+			+ pow(vectorAnkleKneeRightY, 2) + pow(vectorAnkleKneeRightZ, 2));
+
+		double magKneeHip = sqrt(pow(vectorKneeHipRightX, 2)
+			+ pow(vectorKneeHipRightY, 2) + pow(vectorKneeHipRightZ, 2));
+
+		double rightLegAngle = acos(dotAnkleKneeHip / (magAnkleKnee * magKneeHip));
+		if (rightLegAngle < currRightLegAngle) {
+			currRightLegAngle = rightLegAngle;
+		}
+	}
+}
+
+// Checks if squat depth is okay 
+void CBodyBasics::checkSquatDepth() {
+	if ((currRightLegAngle > 100) || (currLeftLegAngle > 100)) {
+		WCHAR szStatusMessage[120];
+		TCHAR* headText = TEXT("Try to squat deeper.");
+		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+
+		SetStatusMessage(szStatusMessage, 3000, true);
+	}
+	else if ((currRightLegAngle < 70) || (currLeftLegAngle < 70)) {
+		WCHAR szStatusMessage[120];
+		TCHAR* headText = TEXT("You squatted too deep.");
+		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+
+		SetStatusMessage(szStatusMessage, 3000, true);
 	}
 }
 

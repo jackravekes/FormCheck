@@ -128,6 +128,8 @@ private:
 
 	void trackReps(const Joint& head);
 	void checkKnees(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
+	void updateSquatDepth(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
+	void checkSquatDepth();
 
     /// <summary>
     /// Draws a body 
