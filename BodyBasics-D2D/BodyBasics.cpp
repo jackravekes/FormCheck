@@ -15,7 +15,6 @@
 #include <Windows.h>
 #include <queue> 
 #include <string>
-#include <map>
 
 using namespace std;
 
@@ -395,7 +394,9 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 								currRightLegAngle = 180;
 							}
                             DrawBody(joints, jointPoints);
-							playAudioFeedback();
+							if (!audioToPlay.empty()) {
+								playAudioFeedback();
+							}
                         }
                     }
                 }
@@ -411,15 +412,6 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
                 DiscardDirect2DResources();
             }
         }
-
-		//if (1)
-		//{
-		//	WCHAR szStatusMessage[120];
-		//	LPCTSTR pszFormat = TEXT("%: %d");
-		//	TCHAR* pszTxt = TEXT("Re!");
-		//	StringCchPrintf(szStatusMessage, _countof(szStatusMessage), pszFormat, pszTxt, neckVal);
-		//	SetStatusMessage(szStatusMessage, 2000, false);
-		//}
     }
 }
 
@@ -462,7 +454,7 @@ void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[J
 	if (trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) {
 		int kneeLeftCM = joints[JointType_KneeLeft].Position.X * 100;
 		int ankleLeftCM = joints[JointType_AnkleLeft].Position.X * 100;
-		if (abs(kneeLeftCM - ankleLeftCM) >= 7) {
+		if (abs(kneeLeftCM - ankleLeftCM) >= 12) {
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
@@ -471,10 +463,10 @@ void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[J
 			audioToPlay.push("audio/knees_over_feet.wav");
 		}
 	}
-	if (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight]) {
+	else if (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight]) {
 		int kneeRightCM = joints[JointType_KneeRight].Position.X * 100;
 		int ankleRightCM = joints[JointType_AnkleRight].Position.X * 100;
-		if (abs(kneeRightCM - ankleRightCM) >= 7) {
+		if (abs(kneeRightCM - ankleRightCM) >= 12) {
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
@@ -518,7 +510,7 @@ void CBodyBasics::updateSquatDepth(Joint joints[JointType_Count], bool trackedJo
 		double magKneeHip = sqrt(pow(vectorKneeHipLeftX, 2)
 			+ pow(vectorKneeHipLeftY, 2) + pow(vectorKneeHipLeftZ, 2));
 
-		double leftLegAngle = acos(dotAnkleKneeHip / (magAnkleKnee * magKneeHip));
+		double leftLegAngle = 200 - (180.0 / 3.1415) * acos(dotAnkleKneeHip / (magAnkleKnee * magKneeHip));
 		if (leftLegAngle < currLeftLegAngle) {
 			currLeftLegAngle = leftLegAngle;
 		}
@@ -544,9 +536,9 @@ void CBodyBasics::updateSquatDepth(Joint joints[JointType_Count], bool trackedJo
 		double vectorKneeHipRightY = hipRightY - kneeRightY;
 		double vectorKneeHipRightZ = hipRightZ - kneeRightZ;
 
-		double dotAnkleKneeHip = vectorAnkleKneeRightX * vectorKneeHipRightX
-			+ vectorAnkleKneeRightY * vectorKneeHipRightY
-			+ vectorAnkleKneeRightZ * vectorKneeHipRightZ;
+		double dotAnkleKneeHip = (vectorAnkleKneeRightX * vectorKneeHipRightX)
+			+ (vectorAnkleKneeRightY * vectorKneeHipRightY)
+			+ (vectorAnkleKneeRightZ * vectorKneeHipRightZ);
 
 		double magAnkleKnee = sqrt(pow(vectorAnkleKneeRightX, 2)
 			+ pow(vectorAnkleKneeRightY, 2) + pow(vectorAnkleKneeRightZ, 2));
@@ -554,11 +546,16 @@ void CBodyBasics::updateSquatDepth(Joint joints[JointType_Count], bool trackedJo
 		double magKneeHip = sqrt(pow(vectorKneeHipRightX, 2)
 			+ pow(vectorKneeHipRightY, 2) + pow(vectorKneeHipRightZ, 2));
 
-		double rightLegAngle = acos(dotAnkleKneeHip / (magAnkleKnee * magKneeHip));
+		double rightLegAngle = 200 - (180.0 / 3.1415) * acos(dotAnkleKneeHip / (magAnkleKnee * magKneeHip));
 		if (rightLegAngle < currRightLegAngle) {
 			currRightLegAngle = rightLegAngle;
 		}
 	}
+	//string s = to_string(currRightLegAngle);
+	//wstring stemp = std::wstring(s.begin(), s.end());
+	//LPCWSTR sw = stemp.c_str();
+	//OutputDebugString(sw);
+	//OutputDebugStringW(L"\n");
 }
 
 // Checks if squat depth is okay 
@@ -572,7 +569,9 @@ void CBodyBasics::checkSquatDepth() {
 		audioToPlay.push("audio/try_to_squat_deeper.wav");
 	}
 	else if ((currRightLegAngle < 70) || (currLeftLegAngle < 70)) {
+
 		WCHAR szStatusMessage[120];
+
 		TCHAR* headText = TEXT("You squatted too deep.");
 		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 		SetStatusMessage(szStatusMessage, 3000, true);
@@ -586,7 +585,7 @@ void CBodyBasics::playAudioFeedback() {
 	if (!audioToPlay.empty()) {
 		string audioFile = audioToPlay.front();
 		wstring stemp = wstring(audioFile.begin(), audioFile.end());
-		PlaySound(stemp.c_str(), NULL, SND_ASYNC);
+		PlaySound(stemp.c_str(), NULL, SND_FILENAME | SND_ASYNC | SND_NOSTOP);
 		audioToPlay.pop();
 	}
 }
