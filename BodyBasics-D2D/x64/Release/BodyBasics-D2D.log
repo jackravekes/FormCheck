@@ -1,7 +1,7 @@
 ﻿  BodyBasics.cpp
   Generating code
-  5 of 280 functions ( 1.8%) were compiled, the rest were copied from previous compilation.
+  6 of 280 functions ( 2.1%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    29 functions had inline decision re-evaluated but remain unchanged
+    3 functions had inline decision re-evaluated but remain unchanged
   Finished generating code
   BodyBasics-D2D.vcxproj -> C:\Users\tchan\OneDrive - Johns Hopkins University\Documents\GitHub\FormCheck\BodyBasics-D2D\x64\Release\BodyBasics-D2D.exe

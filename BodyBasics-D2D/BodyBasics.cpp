@@ -25,7 +25,7 @@ static const float c_HandSize = 30.0f;
 
 // Rep Tracking Parameters
 int repCount = -1;
-int lowerRepThreshold = -30;
+int lowerRepThreshold = -20;
 int upperRepThreshold = 0;
 enum repState {up, down};
 repState currRep = up;
@@ -434,19 +434,19 @@ void CBodyBasics::trackReps(const Joint& head)
 	{
 		checkSquatDepth();
 		repCount++;
+		if ((repCount % 10 == 0) && (repCount != 0)) {
+			audioToPlay.push("audio/good_job.wav");
+		}
+
 		currRep = up;
 	}
 
-	WCHAR szStatusMessage[120];
-	LPCTSTR stringFormat = TEXT("%s %d");
-	TCHAR* headText = TEXT("Head Location: ");
-	TCHAR* repText = TEXT("Rep Count: ");
-	StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
-	SetStatusMessage(szStatusMessage, 33, false);
-
-	if ((repCount % 10 == 0) && (repCount != 0)) {
-		audioToPlay.push("audio/good_job.wav");
-	}
+	//WCHAR szStatusMessage[120];
+	//LPCTSTR stringFormat = TEXT("%s %d");
+	//TCHAR* headText = TEXT("Head Location: ");
+	//TCHAR* repText = TEXT("Rep Count: ");
+	//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
+	//SetStatusMessage(szStatusMessage, 33, false);
 }
 
 void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[JointType_Count])
@@ -454,11 +454,11 @@ void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[J
 	if (trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) {
 		int kneeLeftCM = joints[JointType_KneeLeft].Position.X * 100;
 		int ankleLeftCM = joints[JointType_AnkleLeft].Position.X * 100;
-		if (abs(kneeLeftCM - ankleLeftCM) >= 12) {
+		if (abs(kneeLeftCM - ankleLeftCM) >= 8) {
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-			SetStatusMessage(szStatusMessage, 3000, false);
+			SetStatusMessage(szStatusMessage, 2000, true);
 
 			audioToPlay.push("audio/knees_over_feet.wav");
 		}
@@ -466,11 +466,11 @@ void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[J
 	else if (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight]) {
 		int kneeRightCM = joints[JointType_KneeRight].Position.X * 100;
 		int ankleRightCM = joints[JointType_AnkleRight].Position.X * 100;
-		if (abs(kneeRightCM - ankleRightCM) >= 12) {
+		if (abs(kneeRightCM - ankleRightCM) >= 8) {
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-			SetStatusMessage(szStatusMessage, 3000, true);
+			SetStatusMessage(szStatusMessage, 2000, true);
 
 			audioToPlay.push("audio/knees_over_feet.wav");
 		}
@@ -560,11 +560,11 @@ void CBodyBasics::updateSquatDepth(Joint joints[JointType_Count], bool trackedJo
 
 // Checks if squat depth is okay 
 void CBodyBasics::checkSquatDepth() {
-	if ((currRightLegAngle > 100) || (currLeftLegAngle > 100)) {
+	if ((currRightLegAngle > 97) || (currLeftLegAngle > 97)) {
 		WCHAR szStatusMessage[120];
 		TCHAR* headText = TEXT("Try to squat deeper.");
 		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-		SetStatusMessage(szStatusMessage, 3000, true);
+		SetStatusMessage(szStatusMessage, 2000, true);
 
 		audioToPlay.push("audio/try_to_squat_deeper.wav");
 	}
@@ -574,7 +574,7 @@ void CBodyBasics::checkSquatDepth() {
 
 		TCHAR* headText = TEXT("You squatted too deep.");
 		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-		SetStatusMessage(szStatusMessage, 3000, true);
+		SetStatusMessage(szStatusMessage, 2000, true);
 
 		audioToPlay.push("audio/squatted_too_deep.wav");
 	}
