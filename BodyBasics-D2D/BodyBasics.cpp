@@ -27,6 +27,9 @@ static const float c_HandSize = 30.0f;
 int repCount = -1;
 int lowerRepThreshold = -20;
 int upperRepThreshold = 0;
+int initialHandLeftCM = -1; 
+int initialHandRightCM = -1;
+int initial = 0;
 enum repState {up, down};
 repState currRep = up;
 
@@ -372,14 +375,18 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
                             for (int j = 0; j < _countof(joints); ++j)
                             {
 								if (joints[j].TrackingState == TrackingState_Tracked) {
-									if (joints[j].JointType == JointType_Head) { trackReps(joints[j]); }
+									if (joints[j].JointType == JointType_Head) { trackReps(joints[j], joints); }
 									trackedJoints[j] = true;
 								}
                                 jointPoints[j] = BodyToScreen(joints[j].Position, width, height);
                             }
+							
 							// Only try to fix form if lifter is currently doing the exercise
 							if (currRep == down) {
 								// Tests go here:
+								if ((trackedJoints[JointType_HandLeft] && trackedJoints[JointType_HandRight])) {
+									updateHandPosition(joints, trackedJoints, initialHandLeftCM, initialHandRightCM);
+								}
 								if ((trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) 
 									|| (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_KneeRight])) {
 									checkKnees(joints, trackedJoints);
@@ -388,7 +395,9 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 									|| trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight] && trackedJoints[JointType_HipRight]) {
 									updateSquatDepth(joints, trackedJoints);
 								}
+								
 							}
+								
 							else {
 								currLeftLegAngle = 180;
 								currRightLegAngle = 180;
@@ -415,7 +424,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
     }
 }
 
-void CBodyBasics::trackReps(const Joint& head)
+void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 {
 	int headYinCM = head.Position.Y * 100;
 	if (repCount == -1)
@@ -439,6 +448,12 @@ void CBodyBasics::trackReps(const Joint& head)
 		}
 
 		currRep = up;
+		//collect initial hand data
+		if (initial == 0) {
+			initialHandLeftCM = joints[JointType_HandLeft].Position.Z * 100;
+			initialHandRightCM = joints[JointType_HandRight].Position.Z * 100;
+			initial = 1; //Problems arise when it updates continuously.
+		}
 	}
 
 	//WCHAR szStatusMessage[120];
@@ -449,6 +464,25 @@ void CBodyBasics::trackReps(const Joint& head)
 	//SetStatusMessage(szStatusMessage, 33, false);
 }
 
+void CBodyBasics::updateHandPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count], int initialHandLeftCM, int initialHandRightCM) {
+	if (trackedJoints[JointType_HandLeft] && trackedJoints[JointType_HandRight]) {
+		int handLeftCM = joints[JointType_HandLeft].Position.Z * 100;
+		int handRightCM = joints[JointType_HandRight].Position.Z * 100;
+		if (initialHandLeftCM == -1 || initialHandRightCM == -1) {
+			//initial didn't update properly.
+			return;
+		}
+		if ((initialHandLeftCM - handLeftCM) >= 25 || (initialHandRightCM - handRightCM) >= 25) {
+			WCHAR szStatusMessage[120];
+			TCHAR* headText = TEXT("Keep your spine in a neutral position.");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+			SetStatusMessage(szStatusMessage, 2000, true);
+
+			audioToPlay.push("audio/back_rounding.wav");
+		}
+	}
+	return;
+}
 void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[JointType_Count])
 {
 	if (trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) {

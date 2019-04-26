@@ -126,12 +126,12 @@ private:
     /// <returns>point in screen-space</returns>
     D2D1_POINT_2F BodyToScreen(const CameraSpacePoint& bodyPoint, int width, int height);
 
-	void trackReps(const Joint& head);
+	void trackReps(const Joint& head, Joint joints[JointType_Count]);
 	void checkKnees(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
 	void updateSquatDepth(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
+	void updateHandPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count], int initialHandLeftCM, int initialHandRightCM);
 	void checkSquatDepth();
 	void playAudioFeedback();
-
     /// <summary>
     /// Draws a body 
     /// </summary>
