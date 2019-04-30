@@ -9,6 +9,9 @@
 #include "resource.h"
 #include "BodyBasics.h"
 #include <cmath>
+# include <stdio.h>
+# include <math.h>
+# include <stdlib.h>
 
 //Audio
 #include <Mmsystem.h>
@@ -385,6 +388,9 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 							if (currRep == down) {
 								// Tests go here:
 								if ((trackedJoints[JointType_HandLeft] && trackedJoints[JointType_HandRight])) {
+									//checkHeadPosition(joints, trackedJoints);
+								}
+								if ((trackedJoints[JointType_HandLeft] && trackedJoints[JointType_HandRight])) {
 									updateHandPosition(joints, trackedJoints, initialHandLeftCM, initialHandRightCM);
 								}
 								if ((trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) 
@@ -432,6 +438,36 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 		repCount++;
 		upperRepThreshold = headYinCM;
 		lowerRepThreshold += upperRepThreshold;
+		//Gather starting data. Start with audio. Please get in starting position and wait for the tone to start exercising.
+		if (joints[JointType_FootLeft].TrackingState == TrackingState_Tracked && joints[JointType_FootRight].TrackingState) {
+			if (abs(joints[JointType_FootLeft].Position.X) < abs(joints[JointType_ShoulderLeft].Position.X) - .03) {
+				repCount--;
+				//feet not far enough apart.
+				WCHAR szStatusMessage[120];
+				TCHAR* headText = TEXT("Widen your stance");
+				StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+				SetStatusMessage(szStatusMessage, 2000, true);
+				return;
+			}
+		}
+		else {
+			repCount--;
+			WCHAR szStatusMessage[120];
+			TCHAR* headText = TEXT("Feet not in frame");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+			SetStatusMessage(szStatusMessage, 2000, true);
+			return;
+		}
+		if (joints[JointType_HandLeft].Position.Y < (joints[JointType_ShoulderLeft].Position.Y - .07)) {
+			initialHandLeftCM = joints[JointType_HandLeft].Position.Z * 100;
+			initialHandRightCM = joints[JointType_HandRight].Position.Z * 100;
+			repCount--;
+			WCHAR szStatusMessage[120];
+			TCHAR* headText = TEXT("Get in proper starting position with the bar resting on your shoulders");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+			SetStatusMessage(szStatusMessage, 2000, true);
+			return;	
+		}
 	}
 
 	if (currRep == up && headYinCM < lowerRepThreshold)
@@ -448,12 +484,7 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 		}
 
 		currRep = up;
-		//collect initial hand data
-		if (initial == 0) {
-			initialHandLeftCM = joints[JointType_HandLeft].Position.Z * 100;
-			initialHandRightCM = joints[JointType_HandRight].Position.Z * 100;
-			initial = 1; //Problems arise when it updates continuously.
-		}
+		
 	}
 
 	//WCHAR szStatusMessage[120];
@@ -463,7 +494,55 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 	//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
 	//SetStatusMessage(szStatusMessage, 33, false);
 }
+/*
+ JointType_SpineMid	= 1,
+		JointType_Neck	= 2,
+		JointType_Head	= 3,
+*/
 
+void CBodyBasics::checkHeadPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]) {
+	//Not really working that well, frankly. 
+	if (trackedJoints[JointType_SpineMid] && trackedJoints[JointType_Neck] && trackedJoints[JointType_Head]) {
+		double SpineMidX = joints[JointType_SpineMid].Position.X;
+		double NeckX = joints[JointType_Neck].Position.X;
+		double HeadX = joints[JointType_Head].Position.X;
+
+		double SpineMidY = joints[JointType_SpineMid].Position.Y;
+		double NeckY = joints[JointType_Neck].Position.Y;
+		double HeadY = joints[JointType_Head].Position.Y;
+
+		double SpineMidZ = joints[JointType_SpineMid].Position.Z;
+		double NeckZ = joints[JointType_Neck].Position.Z;
+		double HeadZ = joints[JointType_Head].Position.Z;
+
+		double vectorSpineNeckX = SpineMidX - NeckX;
+		double vectorSpineNeckY = SpineMidY - NeckY;
+		double vectorSpineNeckZ = SpineMidZ - NeckZ;
+
+		double vectorNeckHeadX = HeadX - NeckX;
+		double vectorNeckHeadY = HeadY - NeckY;
+		double vectorNeckHeadZ = HeadZ - NeckZ;
+
+		double dotSpineNeck = (vectorSpineNeckX * vectorNeckHeadX)
+			+ (vectorSpineNeckY * vectorNeckHeadY)
+			+ (vectorSpineNeckZ * vectorNeckHeadZ);
+
+		double magSpineNeck = sqrt(pow(vectorSpineNeckX, 2)
+			+ pow(vectorSpineNeckY, 2) + pow(vectorSpineNeckZ, 2));
+
+		double magNeckHead = sqrt(pow(vectorNeckHeadX, 2)
+			+ pow(vectorNeckHeadY, 2) + pow(vectorNeckHeadZ, 2));
+			double backAngle = 200 - (180.0 / 3.1415) * acos(dotSpineNeck / (magSpineNeck * magNeckHead));
+			if (backAngle > 15) {
+				WCHAR szStatusMessage[120];
+				TCHAR* headText = TEXT("Keep your head in neutral position.");
+				LPCTSTR pszFormat = TEXT("%s %d.");
+				StringCchPrintf(szStatusMessage, _countof(szStatusMessage), pszFormat, headText, backAngle);
+				SetStatusMessage(szStatusMessage, 2000, true);
+			}
+		
+	}
+}
 void CBodyBasics::updateHandPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count], int initialHandLeftCM, int initialHandRightCM) {
 	if (trackedJoints[JointType_HandLeft] && trackedJoints[JointType_HandRight]) {
 		int handLeftCM = joints[JointType_HandLeft].Position.Z * 100;
@@ -472,7 +551,7 @@ void CBodyBasics::updateHandPosition(Joint joints[JointType_Count], bool tracked
 			//initial didn't update properly.
 			return;
 		}
-		if ((initialHandLeftCM - handLeftCM) >= 25 || (initialHandRightCM - handRightCM) >= 25) {
+		if ((initialHandLeftCM - handLeftCM) >= 15 || (initialHandRightCM - handRightCM) >= 15) {
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Keep your spine in a neutral position.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);

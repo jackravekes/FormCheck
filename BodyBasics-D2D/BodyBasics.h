@@ -131,6 +131,7 @@ private:
 	void updateSquatDepth(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
 	void updateHandPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count], int initialHandLeftCM, int initialHandRightCM);
 	void checkSquatDepth();
+	void CBodyBasics::checkHeadPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
 	void playAudioFeedback();
     /// <summary>
     /// Draws a body 
