@@ -19,6 +19,16 @@
 #include <queue> 
 #include <string>
 
+//Balance board
+#include "pch.h"
+#include <stdio.h>
+#include <tchar.h>
+#include "SerialClass.h"	// Library described above
+#include <string>
+#include <regex>
+#include <iostream> 
+#include <sstream>
+#include <thread>
 using namespace std;
 
 static const float c_JointThickness = 3.0f;
@@ -468,8 +478,10 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 			SetStatusMessage(szStatusMessage, 2000, true);
 			return;	
 		}
-	}
 
+		std::thread boardThread(board);
+	}
+	
 	if (currRep == up && headYinCM < lowerRepThreshold)
 	{
 		currRep = down;
@@ -494,12 +506,103 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 	//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
 	//SetStatusMessage(szStatusMessage, 33, false);
 }
-/*
- JointType_SpineMid	= 1,
-		JointType_Neck	= 2,
-		JointType_Head	= 3,
-*/
 
+int CBodyBasics::board()
+{
+	Serial* SP = new Serial("...");    // adjust in library as needed
+
+	//if (SP->IsConnected())
+		//printf("We're connected");
+
+	char incomingData[256] = "";			// don't forget to pre-allocate memory
+	//printf("%s\n",incomingData);
+	int dataLength = 255;
+	int readResult = 0;
+
+
+
+
+
+	while (true) {
+		if (SP->IsConnected())
+		{
+			readResult = SP->ReadData(incomingData, dataLength);
+			//printf("Bytes read: (0 means no data available) %i\n", readResult);
+			incomingData[readResult] = 0;
+			//printf("%s", incomingData);
+
+			if (readResult == 18) {
+
+				std::stringstream ss;
+				ss << incomingData;
+				std::string temp;
+				int weights[4];
+				for (int i = 0; i < 4; i++) {
+					ss >> temp;
+					if (std::stringstream(temp) >> weights[i])
+						temp = "";
+				}
+
+				/*
+				std::cout << "weight 1 = " << weights[0] << std::endl;
+				std::cout << "weight 2 = " << weights[1] << std::endl;
+				std::cout << "weight 3 = " << weights[2] << std::endl;
+				std::cout << "weight 3 = " << weights[3] << std::endl;
+				*/
+				float lr = float(weights[0] + weights[3]) / float(weights[1] + weights[2]);
+				float fb = float(weights[0] + weights[1]) / float(weights[2] + weights[3]);
+
+				if (lr > 1.5) {
+
+				WCHAR szStatusMessage[120];
+				TCHAR* headText = TEXT("Shift your weight to the right");
+				LPCTSTR pszFormat = TEXT("%s %d.");
+				StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+				//SetStatusMessage(szStatusMessage, 2000, true);
+				audioToPlay.push("audio/imbalanced_weight_right_leg.wav");
+
+				}
+				if (lr < .5) { 
+					WCHAR szStatusMessage[120];
+					TCHAR* headText = TEXT("Shift your weight to the left");
+					LPCTSTR pszFormat = TEXT("%s %d.");
+					StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+					//SetStatusMessage(szStatusMessage, 2000, true);
+					audioToPlay.push("audio/imbalanced_weight_left_leg.wav");
+				}
+				/*if (fb > 1.5) {
+					WCHAR szStatusMessage[120];
+					TCHAR* headText = TEXT("Shift your weight back");
+					LPCTSTR pszFormat = TEXT("%s %d.");
+					StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+					//SetStatusMessage(szStatusMessage, 2000, true);
+					audioToPlay.push("audio/shift_weight_back.wav");
+
+				}
+				if (fb < .5) {
+					WCHAR szStatusMessage[120];
+					TCHAR* headText = TEXT("Shift your weight forward");
+					LPCTSTR pszFormat = TEXT("%s %d.");
+					StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+					//SetStatusMessage(szStatusMessage, 2000, true);
+					audioToPlay.push("audio/shift_weight_forward.wav");
+
+				}*/
+
+			}
+
+
+
+
+		}
+
+
+		Sleep(50);
+
+	}
+
+	return 0;
+}
 void CBodyBasics::checkHeadPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]) {
 	//Not really working that well, frankly. 
 	if (trackedJoints[JointType_SpineMid] && trackedJoints[JointType_Neck] && trackedJoints[JointType_Head]) {

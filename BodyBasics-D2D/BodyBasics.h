@@ -133,6 +133,7 @@ private:
 	void checkSquatDepth();
 	void CBodyBasics::checkHeadPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]);
 	void playAudioFeedback();
+	static int board();
     /// <summary>
     /// Draws a body 
     /// </summary>
