@@ -500,7 +500,7 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 
 	if (currRep == down && headYinCM > (upperRepThreshold - 5))
 	{
-		checkSquatDepth();
+		//checkSquatDepth();
 		repCount++;
 		if (goodRep) {
 			WCHAR szStatusMessage[120];
@@ -535,8 +535,8 @@ void CBodyBasics::board()
 		WCHAR szStatusMessage[120];
 		LPCTSTR stringFormat = TEXT("%s");
 		//TCHAR* headText = TEXT("Get in proper starting position with the bar resting on your shoulders");
-		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, incomingData);
-		SetStatusMessage(szStatusMessage, 2000, true);
+		//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, incomingData);
+		//SetStatusMessage(szStatusMessage, 2000, true);
 
 		if (readResult == 18) {
 
@@ -651,7 +651,7 @@ void CBodyBasics::updateHandPosition(Joint joints[JointType_Count], bool tracked
 			//initial didn't update properly.
 			return;
 		}
-		if ((initialHandLeftCM - handLeftCM) >= 15 || (initialHandRightCM - handRightCM) >= 15) {
+		if ((initialHandLeftCM - handLeftCM) >= 13 || (initialHandRightCM - handRightCM) >= 13) {
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Keep your spine in a neutral position.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
