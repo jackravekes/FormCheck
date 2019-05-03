@@ -30,6 +30,11 @@
 #include <sstream>
 #include <thread>
 using namespace std;
+Serial* SP = new Serial("...");    // adjust in library as needed
+char incomingData[256] = "";			// don't forget to pre-allocate memory
+//printf("%s\n",incomingData);
+int dataLength = 255;
+int readResult = 0;
 
 static const float c_JointThickness = 3.0f;
 static const float c_TrackedBoneThickness = 6.0f;
@@ -38,11 +43,15 @@ static const float c_HandSize = 30.0f;
 
 // Rep Tracking Parameters
 int repCount = -1;
-int lowerRepThreshold = -20;
+int lowerRepThreshold = -38;
 int upperRepThreshold = 0;
 int initialHandLeftCM = -1; 
 int initialHandRightCM = -1;
+int initialLeftKneeCM = -1;
+int initialRightKneeCM = -1;
+int kneeDistance;
 int initial = 0;
+bool goodRep = true;
 enum repState {up, down};
 repState currRep = up;
 
@@ -403,14 +412,14 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 								if ((trackedJoints[JointType_HandLeft] && trackedJoints[JointType_HandRight])) {
 									updateHandPosition(joints, trackedJoints, initialHandLeftCM, initialHandRightCM);
 								}
-								if ((trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) 
-									|| (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_KneeRight])) {
+								if (trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_KneeRight]) {
 									checkKnees(joints, trackedJoints);
 								}
 								if ((trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft] && trackedJoints[JointType_HipLeft])
 									|| trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight] && trackedJoints[JointType_HipRight]) {
 									updateSquatDepth(joints, trackedJoints);
 								}
+								board();
 								
 							}
 								
@@ -440,18 +449,15 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
     }
 }
 
+
 void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 {
-	int headYinCM = head.Position.Y * 100;
+	int headYinCM;
 	if (repCount == -1)
 	{
-		repCount++;
-		upperRepThreshold = headYinCM;
-		lowerRepThreshold += upperRepThreshold;
 		//Gather starting data. Start with audio. Please get in starting position and wait for the tone to start exercising.
 		if (joints[JointType_FootLeft].TrackingState == TrackingState_Tracked && joints[JointType_FootRight].TrackingState) {
-			if (abs(joints[JointType_FootLeft].Position.X) < abs(joints[JointType_ShoulderLeft].Position.X) - .03) {
-				repCount--;
+			if (abs(joints[JointType_FootLeft].Position.X) < abs(joints[JointType_ShoulderLeft].Position.X) - .06) {
 				//feet not far enough apart.
 				WCHAR szStatusMessage[120];
 				TCHAR* headText = TEXT("Widen your stance");
@@ -461,7 +467,6 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 			}
 		}
 		else {
-			repCount--;
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Feet not in frame");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
@@ -471,15 +476,21 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 		if (joints[JointType_HandLeft].Position.Y < (joints[JointType_ShoulderLeft].Position.Y - .07)) {
 			initialHandLeftCM = joints[JointType_HandLeft].Position.Z * 100;
 			initialHandRightCM = joints[JointType_HandRight].Position.Z * 100;
-			repCount--;
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Get in proper starting position with the bar resting on your shoulders");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 			SetStatusMessage(szStatusMessage, 2000, true);
 			return;	
 		}
+		repCount++;
+		headYinCM = head.Position.Y * 100;
+		upperRepThreshold = headYinCM;
+		lowerRepThreshold += headYinCM;
+		//initialLeftKneeCM = joints[JointType_KneeLeft].Position.X * 100;
+		//initialRightKneeCM = joints[JointType_KneeRight].Position.X * 100;
+		//kneeDistance = abs(initialLeftKneeCM - initialRightKneeCM);
 
-		std::thread boardThread(board);
+		//std::thread boardThread(board);
 	}
 	
 	if (currRep == up && headYinCM < lowerRepThreshold)
@@ -487,14 +498,19 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 		currRep = down;
 	}
 
-	if (currRep == down && headYinCM > upperRepThreshold)
+	if (currRep == down && headYinCM > (upperRepThreshold - 5))
 	{
 		checkSquatDepth();
 		repCount++;
-		if ((repCount % 10 == 0) && (repCount != 0)) {
-			audioToPlay.push("audio/good_job.wav");
+		if (goodRep) {
+			WCHAR szStatusMessage[120];
+			TCHAR* headText = TEXT("Squat completed");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+			SetStatusMessage(szStatusMessage, 2000, true);
 		}
-
+		else {
+			goodRep = false;
+		}
 		currRep = up;
 		
 	}
@@ -507,101 +523,82 @@ void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 	//SetStatusMessage(szStatusMessage, 33, false);
 }
 
-int CBodyBasics::board()
+void CBodyBasics::board()
 {
-	Serial* SP = new Serial("...");    // adjust in library as needed
 
-	//if (SP->IsConnected())
-		//printf("We're connected");
+	if (SP->IsConnected())
+	{
+		readResult = SP->ReadData(incomingData, dataLength);
+		//printf("Bytes read: (0 means no data available) %i\n", readResult);
+		incomingData[readResult] = 0;
+		//printf("%s", incomingData);
+		WCHAR szStatusMessage[120];
+		LPCTSTR stringFormat = TEXT("%s");
+		//TCHAR* headText = TEXT("Get in proper starting position with the bar resting on your shoulders");
+		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, incomingData);
+		SetStatusMessage(szStatusMessage, 2000, true);
 
-	char incomingData[256] = "";			// don't forget to pre-allocate memory
-	//printf("%s\n",incomingData);
-	int dataLength = 255;
-	int readResult = 0;
+		if (readResult == 18) {
 
+			std::stringstream ss;
+			ss << incomingData;
+			std::string temp;
+			int weights[4];
+			for (int i = 0; i < 4; i++) {
+				ss >> temp;
+				if (std::stringstream(temp) >> weights[i])
+					temp = "";
+			}
 
+			/*
+			std::cout << "weight 1 = " << weights[0] << std::endl;
+			std::cout << "weight 2 = " << weights[1] << std::endl;
+			std::cout << "weight 3 = " << weights[2] << std::endl;
+			std::cout << "weight 3 = " << weights[3] << std::endl;
+			*/
+			float lr = float(weights[0] + weights[3]) / float(weights[1] + weights[2]);
+			float fb = float(weights[0] + weights[1]) / float(weights[2] + weights[3]);
 
+			if (lr < .7) {
 
+			WCHAR szStatusMessage[120];
+			TCHAR* headText = TEXT("Shift your weight to the right");
+			LPCTSTR pszFormat = TEXT("%s %d.");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+			//SetStatusMessage(szStatusMessage, 2000, true);
+			audioToPlay.push("audio/imbalanced_weight_right_leg.wav");
 
-	while (true) {
-		if (SP->IsConnected())
-		{
-			readResult = SP->ReadData(incomingData, dataLength);
-			//printf("Bytes read: (0 means no data available) %i\n", readResult);
-			incomingData[readResult] = 0;
-			//printf("%s", incomingData);
-
-			if (readResult == 18) {
-
-				std::stringstream ss;
-				ss << incomingData;
-				std::string temp;
-				int weights[4];
-				for (int i = 0; i < 4; i++) {
-					ss >> temp;
-					if (std::stringstream(temp) >> weights[i])
-						temp = "";
-				}
-
-				/*
-				std::cout << "weight 1 = " << weights[0] << std::endl;
-				std::cout << "weight 2 = " << weights[1] << std::endl;
-				std::cout << "weight 3 = " << weights[2] << std::endl;
-				std::cout << "weight 3 = " << weights[3] << std::endl;
-				*/
-				float lr = float(weights[0] + weights[3]) / float(weights[1] + weights[2]);
-				float fb = float(weights[0] + weights[1]) / float(weights[2] + weights[3]);
-
-				if (lr > 1.5) {
-
+			}
+			if (lr > 1.3) { 
 				WCHAR szStatusMessage[120];
-				TCHAR* headText = TEXT("Shift your weight to the right");
+				TCHAR* headText = TEXT("Shift your weight to the left");
 				LPCTSTR pszFormat = TEXT("%s %d.");
 				StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 				//SetStatusMessage(szStatusMessage, 2000, true);
-				audioToPlay.push("audio/imbalanced_weight_right_leg.wav");
-
-				}
-				if (lr < .5) { 
-					WCHAR szStatusMessage[120];
-					TCHAR* headText = TEXT("Shift your weight to the left");
-					LPCTSTR pszFormat = TEXT("%s %d.");
-					StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-					//SetStatusMessage(szStatusMessage, 2000, true);
-					audioToPlay.push("audio/imbalanced_weight_left_leg.wav");
-				}
-				/*if (fb > 1.5) {
-					WCHAR szStatusMessage[120];
-					TCHAR* headText = TEXT("Shift your weight back");
-					LPCTSTR pszFormat = TEXT("%s %d.");
-					StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-					//SetStatusMessage(szStatusMessage, 2000, true);
-					audioToPlay.push("audio/shift_weight_back.wav");
-
-				}
-				if (fb < .5) {
-					WCHAR szStatusMessage[120];
-					TCHAR* headText = TEXT("Shift your weight forward");
-					LPCTSTR pszFormat = TEXT("%s %d.");
-					StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-					//SetStatusMessage(szStatusMessage, 2000, true);
-					audioToPlay.push("audio/shift_weight_forward.wav");
-
-				}*/
+				audioToPlay.push("audio/imbalanced_weight_left_leg.wav");
+			}
+			/*if (fb > 1.5) {
+				WCHAR szStatusMessage[120];
+				TCHAR* headText = TEXT("Shift your weight back");
+				LPCTSTR pszFormat = TEXT("%s %d.");
+				StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+				//SetStatusMessage(szStatusMessage, 2000, true);
+				audioToPlay.push("audio/shift_weight_back.wav");
 
 			}
+			if (fb < .5) {
+				WCHAR szStatusMessage[120];
+				TCHAR* headText = TEXT("Shift your weight forward");
+				LPCTSTR pszFormat = TEXT("%s %d.");
+				StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+				//SetStatusMessage(szStatusMessage, 2000, true);
+				audioToPlay.push("audio/shift_weight_forward.wav");
 
-
-
+			}*/
 
 		}
 
-
-		Sleep(50);
-
 	}
-
-	return 0;
 }
 void CBodyBasics::checkHeadPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count]) {
 	//Not really working that well, frankly. 
@@ -659,7 +656,7 @@ void CBodyBasics::updateHandPosition(Joint joints[JointType_Count], bool tracked
 			TCHAR* headText = TEXT("Keep your spine in a neutral position.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 			SetStatusMessage(szStatusMessage, 2000, true);
-
+			goodRep = false;
 			audioToPlay.push("audio/back_rounding.wav");
 		}
 	}
@@ -667,30 +664,21 @@ void CBodyBasics::updateHandPosition(Joint joints[JointType_Count], bool tracked
 }
 void CBodyBasics::checkKnees(Joint joints[JointType_Count], bool trackedJoints[JointType_Count])
 {
-	if (trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_AnkleLeft]) {
+	if (trackedJoints[JointType_KneeLeft] && trackedJoints[JointType_KneeRight]) {
 		int kneeLeftCM = joints[JointType_KneeLeft].Position.X * 100;
-		int ankleLeftCM = joints[JointType_AnkleLeft].Position.X * 100;
-		if (abs(kneeLeftCM - ankleLeftCM) >= 8) {
-			WCHAR szStatusMessage[120];
-			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
-			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-			SetStatusMessage(szStatusMessage, 2000, true);
-
-			audioToPlay.push("audio/knees_over_feet.wav");
-		}
-	}
-	else if (trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight]) {
 		int kneeRightCM = joints[JointType_KneeRight].Position.X * 100;
-		int ankleRightCM = joints[JointType_AnkleRight].Position.X * 100;
-		if (abs(kneeRightCM - ankleRightCM) >= 8) {
+		int distance = abs(kneeLeftCM - kneeRightCM);
+
+		if (distance <= 24) {
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Make sure your knees are over your feet.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 			SetStatusMessage(szStatusMessage, 2000, true);
-
+			goodRep = false;
 			audioToPlay.push("audio/knees_over_feet.wav");
 		}
 	}
+	
 }
 
 void CBodyBasics::updateSquatDepth(Joint joints[JointType_Count], bool trackedJoints[JointType_Count])
@@ -781,17 +769,17 @@ void CBodyBasics::checkSquatDepth() {
 		TCHAR* headText = TEXT("Try to squat deeper.");
 		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 		SetStatusMessage(szStatusMessage, 2000, true);
-
+		goodRep = false;
 		audioToPlay.push("audio/try_to_squat_deeper.wav");
 	}
-	else if ((currRightLegAngle < 70) || (currLeftLegAngle < 70)) {
+	else if ((currRightLegAngle < 75) || (currLeftLegAngle < 75)) {
 
 		WCHAR szStatusMessage[120];
 
 		TCHAR* headText = TEXT("You squatted too deep.");
 		StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 		SetStatusMessage(szStatusMessage, 2000, true);
-
+		goodRep = false;
 		audioToPlay.push("audio/squatted_too_deep.wav");
 	}
 }

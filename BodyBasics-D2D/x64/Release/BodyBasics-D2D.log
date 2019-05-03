@@ -1,7 +1,6 @@
 ﻿  BodyBasics.cpp
+  SerialClass.cpp
   Generating code
-  2 of 433 functions ( 0.5%) were compiled, the rest were copied from previous compilation.
-    0 functions were new in current compilation
-    6 functions had inline decision re-evaluated but remain unchanged
+  All 374 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
   Finished generating code
-  BodyBasics-D2D.vcxproj -> C:\Users\jackr\VSProjects\FormCheck\BodyBasics-D2D\x64\Release\BodyBasics-D2D.exe
+  BodyBasics-D2D.vcxproj -> C:\Users\tchan\OneDrive - Johns Hopkins University\Documents\GitHub\FormCheck\BodyBasics-D2D\x64\Release\BodyBasics-D2D.exe

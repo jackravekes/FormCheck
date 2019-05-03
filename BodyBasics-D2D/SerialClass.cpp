@@ -8,7 +8,7 @@ Serial::Serial(const char *portName)
 	this->connected = false;
 
 	//Try to connect to the given port throuh CreateFile
-	this->hSerial = CreateFile(_T("\\\\.\\COM14"),
+	this->hSerial = CreateFile(_T("\\\\.\\COM13"),
 		GENERIC_READ | GENERIC_WRITE,
 		0,
 		NULL,
