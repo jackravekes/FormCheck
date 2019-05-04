@@ -43,7 +43,7 @@ static const float c_HandSize = 30.0f;
 
 // Rep Tracking Parameters
 int repCount = -1;
-int lowerRepThreshold = -38;
+int lowerRepThreshold;
 int upperRepThreshold = 0;
 int initialHandLeftCM = -1; 
 int initialHandRightCM = -1;
@@ -54,6 +54,7 @@ int initial = 0;
 bool goodRep = true;
 enum repState {up, down};
 repState currRep = up;
+bool onBoard = false;
 
 double currLeftLegAngle = 180;
 double currRightLegAngle = 180;
@@ -404,7 +405,7 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
                             }
 							
 							// Only try to fix form if lifter is currently doing the exercise
-							if (currRep == down) {
+							if (currRep == down && onBoard) {
 								// Tests go here:
 								if ((trackedJoints[JointType_HandLeft] && trackedJoints[JointType_HandRight])) {
 									//checkHeadPosition(joints, trackedJoints);
@@ -419,8 +420,6 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
 									|| trackedJoints[JointType_KneeRight] && trackedJoints[JointType_AnkleRight] && trackedJoints[JointType_HipRight]) {
 									updateSquatDepth(joints, trackedJoints);
 								}
-								board();
-								
 							}
 								
 							else {
@@ -449,78 +448,88 @@ void CBodyBasics::ProcessBody(INT64 nTime, int nBodyCount, IBody** ppBodies)
     }
 }
 
-
 void CBodyBasics::trackReps(const Joint& head, Joint joints[JointType_Count])
 {
-	int headYinCM;
-	if (repCount == -1)
+	board();
+	if (head.TrackingState == TrackingState_Tracked)
 	{
-		//Gather starting data. Start with audio. Please get in starting position and wait for the tone to start exercising.
-		if (joints[JointType_FootLeft].TrackingState == TrackingState_Tracked && joints[JointType_FootRight].TrackingState) {
-			if (abs(joints[JointType_FootLeft].Position.X) < abs(joints[JointType_ShoulderLeft].Position.X) - .06) {
-				//feet not far enough apart.
+		int headYinCM = head.Position.Y * 100;
+		if (repCount == -1 && onBoard) 
+		{
+			//Gather starting data. Start with audio. Please get in starting position and wait for the tone to start exercising.
+			if (joints[JointType_FootLeft].TrackingState == TrackingState_Tracked && joints[JointType_FootRight].TrackingState) {
+				if (abs(joints[JointType_AnkleLeft].Position.X) < abs(joints[JointType_ShoulderLeft].Position.X)) {
+					//feet not far enough apart.
+					WCHAR szStatusMessage[120];
+					TCHAR* headText = TEXT("Widen your stance");
+					StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+					SetStatusMessage(szStatusMessage, 2000, true);
+					return;
+				}
+			}
+			else {
 				WCHAR szStatusMessage[120];
-				TCHAR* headText = TEXT("Widen your stance");
+				TCHAR* headText = TEXT("Feet not in frame");
 				StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 				SetStatusMessage(szStatusMessage, 2000, true);
 				return;
 			}
-		}
-		else {
+			//audioToPlay.push("audio/CalibratingWait.wav");
+			//playAudioFeedback();
+			Sleep(3000);
 			WCHAR szStatusMessage[120];
-			TCHAR* headText = TEXT("Feet not in frame");
+			audioToPlay.push("audio/StartSquatting.wav");
+			playAudioFeedback();
+			TCHAR* headText = TEXT("Ready to Squat");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
+			SetStatusMessage(szStatusMessage, 2000, true);
+			initialHandLeftCM = joints[JointType_ShoulderLeft].Position.Z * 100;
+			initialHandRightCM = joints[JointType_ShoulderRight].Position.Z * 100;
+			repCount++;
+			headYinCM = head.Position.Y * 100;
+			upperRepThreshold = headYinCM;
+			lowerRepThreshold = headYinCM - 20;
+			currRep = up;
+			//initialLeftKneeCM = joints[JointType_KneeLeft].Position.X * 100;
+			//initialRightKneeCM = joints[JointType_KneeRight].Position.X * 100;
+			//kneeDistance = abs(initialLeftKneeCM - initialRightKneeCM);
+
+			//std::thread boardThread(board);
+		} 
+		else if (!onBoard) {
+			WCHAR szStatusMessage[120];
+			TCHAR* headText = TEXT("Get onto the board");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 			SetStatusMessage(szStatusMessage, 2000, true);
 			return;
+			//Get on Board
 		}
-		if (joints[JointType_HandLeft].Position.Y < (joints[JointType_ShoulderLeft].Position.Y - .07)) {
-			initialHandLeftCM = joints[JointType_HandLeft].Position.Z * 100;
-			initialHandRightCM = joints[JointType_HandRight].Position.Z * 100;
-			WCHAR szStatusMessage[120];
-			TCHAR* headText = TEXT("Get in proper starting position with the bar resting on your shoulders");
-			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-			SetStatusMessage(szStatusMessage, 2000, true);
-			return;	
-		}
-		repCount++;
-		headYinCM = head.Position.Y * 100;
-		upperRepThreshold = headYinCM;
-		lowerRepThreshold += headYinCM;
-		//initialLeftKneeCM = joints[JointType_KneeLeft].Position.X * 100;
-		//initialRightKneeCM = joints[JointType_KneeRight].Position.X * 100;
-		//kneeDistance = abs(initialLeftKneeCM - initialRightKneeCM);
-
-		//std::thread boardThread(board);
-	}
 	
-	if (currRep == up && headYinCM < lowerRepThreshold)
-	{
-		currRep = down;
-	}
-
-	if (currRep == down && headYinCM > (upperRepThreshold - 5))
-	{
-		//checkSquatDepth();
-		repCount++;
-		if (goodRep) {
-			WCHAR szStatusMessage[120];
-			TCHAR* headText = TEXT("Squat completed");
-			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
-			SetStatusMessage(szStatusMessage, 2000, true);
+		if (currRep == up && headYinCM < lowerRepThreshold && onBoard)
+		{
+			currRep = down;
 		}
-		else {
-			goodRep = false;
-		}
-		currRep = up;
-		
-	}
 
-	//WCHAR szStatusMessage[120];
-	//LPCTSTR stringFormat = TEXT("%s %d");
-	//TCHAR* headText = TEXT("Head Location: ");
-	//TCHAR* repText = TEXT("Rep Count: ");
-	//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
-	//SetStatusMessage(szStatusMessage, 33, false);
+		if (currRep == down && headYinCM > (upperRepThreshold - 8) && onBoard)
+		{
+			checkSquatDepth();
+			repCount++;
+			if (goodRep) {
+				audioToPlay.push("audio/GoodSquat.wav");
+				//WCHAR szStatusMessage[120];
+				//LPCTSTR stringFormat = TEXT("%s %d");
+				//TCHAR* repText = TEXT("Rep Count: ");
+				//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, repText, repCount);
+
+				//SetStatusMessage(szStatusMessage, 33, false);
+				//Good Rep Audio
+			}
+			else {
+				goodRep = true;
+			}
+			currRep = up;
+		}
+	}
 }
 
 void CBodyBasics::board()
@@ -532,8 +541,8 @@ void CBodyBasics::board()
 		//printf("Bytes read: (0 means no data available) %i\n", readResult);
 		incomingData[readResult] = 0;
 		//printf("%s", incomingData);
-		WCHAR szStatusMessage[120];
-		LPCTSTR stringFormat = TEXT("%s");
+		//WCHAR szStatusMessage[120];
+		//LPCTSTR stringFormat = TEXT("%d");
 		//TCHAR* headText = TEXT("Get in proper starting position with the bar resting on your shoulders");
 		//StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, incomingData);
 		//SetStatusMessage(szStatusMessage, 2000, true);
@@ -550,6 +559,22 @@ void CBodyBasics::board()
 					temp = "";
 			}
 
+			for (int j = 0; j < 4; j++) {
+				if (weights[j] > 10) {
+					onBoard = true;
+					break;
+				}
+				repCount = -1;
+				onBoard = false;
+				currRep = up;
+				return;
+			}
+
+		/*	WCHAR szStatusMessage[120];
+			LPCTSTR stringFormat = TEXT("%d %d %d %d");
+			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), stringFormat, weights[0], weights[1], weights[2], weights[3]);
+			SetStatusMessage(szStatusMessage, 33, false);*/
+
 			/*
 			std::cout << "weight 1 = " << weights[0] << std::endl;
 			std::cout << "weight 2 = " << weights[1] << std::endl;
@@ -559,20 +584,18 @@ void CBodyBasics::board()
 			float lr = float(weights[0] + weights[3]) / float(weights[1] + weights[2]);
 			float fb = float(weights[0] + weights[1]) / float(weights[2] + weights[3]);
 
-			if (lr < .7) {
+			if (lr < .7 && repCount > 0 && currRep == down) {
 
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Shift your weight to the right");
-			LPCTSTR pszFormat = TEXT("%s %d.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 			//SetStatusMessage(szStatusMessage, 2000, true);
 			audioToPlay.push("audio/imbalanced_weight_right_leg.wav");
 
 			}
-			if (lr > 1.3) { 
+			if (lr > 1.5  && repCount > 0 && currRep == down) {
 				WCHAR szStatusMessage[120];
 				TCHAR* headText = TEXT("Shift your weight to the left");
-				LPCTSTR pszFormat = TEXT("%s %d.");
 				StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
 				//SetStatusMessage(szStatusMessage, 2000, true);
 				audioToPlay.push("audio/imbalanced_weight_left_leg.wav");
@@ -644,14 +667,14 @@ void CBodyBasics::checkHeadPosition(Joint joints[JointType_Count], bool trackedJ
 	}
 }
 void CBodyBasics::updateHandPosition(Joint joints[JointType_Count], bool trackedJoints[JointType_Count], int initialHandLeftCM, int initialHandRightCM) {
-	if (trackedJoints[JointType_HandLeft] && trackedJoints[JointType_HandRight]) {
-		int handLeftCM = joints[JointType_HandLeft].Position.Z * 100;
-		int handRightCM = joints[JointType_HandRight].Position.Z * 100;
+	if (trackedJoints[JointType_ShoulderLeft] && trackedJoints[JointType_ShoulderRight]) {
+		int handLeftCM = joints[JointType_ShoulderLeft].Position.Z * 100;
+		int handRightCM = joints[JointType_ShoulderRight].Position.Z * 100;
 		if (initialHandLeftCM == -1 || initialHandRightCM == -1) {
 			//initial didn't update properly.
 			return;
 		}
-		if ((initialHandLeftCM - handLeftCM) >= 13 || (initialHandRightCM - handRightCM) >= 13) {
+		if ((initialHandLeftCM - handLeftCM) >= 20 || (initialHandRightCM - handRightCM) >= 20) {
 			WCHAR szStatusMessage[120];
 			TCHAR* headText = TEXT("Keep your spine in a neutral position.");
 			StringCchPrintf(szStatusMessage, _countof(szStatusMessage), headText);
@@ -772,7 +795,7 @@ void CBodyBasics::checkSquatDepth() {
 		goodRep = false;
 		audioToPlay.push("audio/try_to_squat_deeper.wav");
 	}
-	else if ((currRightLegAngle < 75) || (currLeftLegAngle < 75)) {
+	else if ((currRightLegAngle < 80) || (currLeftLegAngle < 80)) {
 
 		WCHAR szStatusMessage[120];
 
